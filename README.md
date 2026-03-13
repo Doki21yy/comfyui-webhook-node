@@ -1,6 +1,6 @@
-# ComfyUI Webhook Callback Node
+# ComfyUI API Bridge Node
 
-A single custom node that sends workflow results to a webhook URL when execution completes.
+Install one node, ComfyUI becomes an API service.
 
 ## Install
 
@@ -10,39 +10,53 @@ Copy this folder to `ComfyUI/custom_nodes/comfyui-webhook-node/`:
 ComfyUI/custom_nodes/comfyui-webhook-node/
   __init__.py
   webhook_node.py
+  api_routes.py
 ```
 
-Restart ComfyUI. Search "Webhook" in the node list.
+Restart ComfyUI. Done.
+
+## API Endpoints (auto-registered)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/bridge/run` | POST | Submit workflow + wait for result |
+| `/api/bridge/submit` | POST | Submit workflow (async) |
+| `/api/bridge/status/{id}` | GET | Check task result |
+| `/api/bridge/health` | GET | Health check + queue info |
 
 ## Usage
 
-1. Add **Webhook Callback (API Bridge)** node to your workflow
-2. Connect your output (images / text / audio) to the node
-3. Set `webhook_url` to your callback endpoint
-4. Set `task_id` to identify the task
-
-When the workflow finishes, the node POSTs results as JSON to your webhook URL.
-
-## Payload Format
-
-```json
-{
-  "task_id": "abc123",
-  "status": "completed",
-  "outputs": {
-    "images": [{"filename": "output.png", "type": "image/png", "base64": "..."}],
-    "text": "generated text",
-    "audio": [{"filename": "output.wav", "type": "audio/wav", "base64": "..."}]
-  }
-}
+### Health Check
+```bash
+curl https://your-comfyui-url/api/bridge/health
 ```
 
-## Why
+### Run Workflow
+```bash
+curl -X POST https://your-comfyui-url/api/bridge/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow": { ... },
+    "text": "A cute cat"
+  }'
+```
 
-ComfyUI has a built-in API (`POST /prompt`, `GET /history`) but lacks push notifications. This node fills that gap - place it at the end of any workflow to get results pushed to you instead of polling.
+The `workflow` field is the API-format JSON exported from ComfyUI (right-click -> Save API Format).
 
-## Supports
+The `text` field is optional - if provided, it auto-injects into the first text input node.
 
-- Images (PIL/torch tensor -> PNG -> base64)
-- Text (string passthrough)
-- Audio (torchaudio -> WAV -> base64)
+### Async Submit
+```bash
+curl -X POST https://your-comfyui-url/api/bridge/submit \
+  -H "Content-Type: application/json" \
+  -d '{"workflow": { ... }, "text": "A cute cat"}'
+
+# Returns: {"prompt_id": "xxx", "status": "queued"}
+
+# Then check result:
+curl https://your-comfyui-url/api/bridge/status/xxx
+```
+
+## Also Includes
+
+**Webhook Callback** output node - place at the end of any workflow to POST results to a callback URL when execution completes. Search "Webhook" in the node list.
